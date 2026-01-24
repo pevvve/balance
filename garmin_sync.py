@@ -12,9 +12,8 @@ GARMIN_PASS = os.environ["GARMIN_PASS"]
 GOOGLE_JSON_KEY = json.loads(os.environ["GOOGLE_JSON_KEY"]) 
 
 # !!! PASTE YOUR SPREADSHEET ID HERE !!!
-SHEET_ID = "PASTE_YOUR_ID_HERE" 
-TAB_NAME = "Garmin_Stats" 
-
+SHEET_ID = "1wCX2fT-YYi67ZmlrZLq6xc--l1mVyuG3Bv5Z9h0NNJw" 
+TAB_NAME = "Garmin
 SCOPES = [
     'https://www.googleapis.com/auth/spreadsheets',
     'https://www.googleapis.com/auth/drive'
