@@ -1,0 +1,34 @@
+name: Garmin Data Sync
+
+on:
+  # 1. Automatic Schedule
+  schedule:
+    # Runs at 12:00 UTC (which is 6:00 AM Mexico City time)
+    - cron: '0 12 * * *'
+  
+  # 2. Manual Button (So you can test it right now)
+  workflow_dispatch:
+
+jobs:
+  sync_garmin:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install Libraries
+        run: |
+          pip install garminconnect gspread
+
+      - name: Run Sync Script
+        env:
+          GARMIN_EMAIL: ${{ secrets.GARMIN_EMAIL }}
+          GARMIN_PASS: ${{ secrets.GARMIN_PASS }}
+          GOOGLE_JSON_KEY: ${{ secrets.GOOGLE_JSON_KEY }}
+        run: python garmin_sync.py
