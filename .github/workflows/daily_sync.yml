@@ -26,9 +26,9 @@ jobs:
         run: |
           pip install garminconnect gspread
 
-      - name: Run Sync Script
+      - name: Run Diagnostic
         env:
           GARMIN_EMAIL: ${{ secrets.GARMIN_EMAIL }}
           GARMIN_PASS: ${{ secrets.GARMIN_PASS }}
-          GOOGLE_JSON_KEY: ${{ secrets.GOOGLE_JSON_KEY }}
+         
         run: python python diagnostic.py
