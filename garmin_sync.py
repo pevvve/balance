@@ -13,7 +13,7 @@ GOOGLE_JSON_KEY = json.loads(os.environ["GOOGLE_JSON_KEY"])
 
 # !!! PASTE YOUR SPREADSHEET ID HERE !!!
 SHEET_ID = "1wCX2fT-YYi67ZmlrZLq6xc--l1mVyuG3Bv5Z9h0NNJw" 
-TAB_NAME = "Garmin
+TAB_NAME = "Garmin"
 SCOPES = [
     'https://www.googleapis.com/auth/spreadsheets',
     'https://www.googleapis.com/auth/drive'
