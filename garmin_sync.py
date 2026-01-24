@@ -30,7 +30,7 @@ def mps_to_pace(mps):
     return f"{minutes}:{seconds:02d}"
 
 def main():
-    print("--- Starting Garmin Enduro 3 Sync (Safe Mode) ---")
+    print("--- Starting Garmin Enduro 3 Sync (Fixed List Bug) ---")
     
     # 1. Login
     try:
@@ -62,19 +62,16 @@ def main():
 
     try:
         # --- FETCH DATA ---
-        # We wrap each call in a safety check in case the library changes
         stats = garmin.get_stats(iso_date)
         body_batt = garmin.get_body_battery(iso_date)
         sleep = garmin.get_sleep_data(iso_date)
         user_summary = garmin.get_user_summary(iso_date)
         
-        # Training status is often messy, we handle it carefully
         try:
             training_status = garmin.get_training_status(iso_date) or {}
         except:
             training_status = {}
             
-        # Get Activities
         activities = garmin.get_activities_by_date(iso_date, iso_date, "")
         
         # --- PARSING ---
@@ -89,7 +86,11 @@ def main():
         sleep_hours = round(sleep_dto.get('sleepTimeSeconds', 0) / 3600, 2)
         sleep_score = sleep_dto.get('sleepScores', {}).get('overall', {}).get('value', 0)
 
-        # Body Battery
+        # --- BODY BATTERY FIX ---
+        # If API returns a list, grab the first item. If dict, use it directly.
+        if isinstance(body_batt, list):
+            body_batt = body_batt[0] if body_batt else {}
+            
         bb_list = body_batt.get('bodyBatteryValuesArray', [])
         if bb_list:
             vals = [x[1] for x in bb_list if x[1] is not None]
@@ -98,8 +99,7 @@ def main():
         else:
             bb_high, bb_low = 0, 0
 
-        # Metrics that caused the crash are now set to safe defaults or extracted differently
-        fit_age = 0 # Placeholder since library doesn't support it directly
+        # Training Metrics
         acute_load = training_status.get('acuteTrainingLoadValue', 0)
         endurance_score = training_status.get('enduranceScore', 0)
 
@@ -128,6 +128,7 @@ def main():
         print(f"Stats: RHR {resting_hr}, Sleep {sleep_hours}h, Runs {run_count}")
 
         # --- UPLOAD ---
+        # Note: 'fit_age' is removed. List has 18 items.
         row_data = [
             iso_date, resting_hr, stress_avg, sleep_score, sleep_hours,
             bb_high, bb_low, vo2_max, acute_load,
