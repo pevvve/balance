@@ -3,17 +3,19 @@ import datetime
 import gspread
 import json
 import statistics
-import traceback # Added for better error messages
+import traceback
 from garminconnect import Garmin
 
 # --- CONFIGURATION ---
 GARMIN_EMAIL = os.environ["GARMIN_EMAIL"]
 GARMIN_PASS = os.environ["GARMIN_PASS"]
 GOOGLE_JSON_KEY = json.loads(os.environ["GOOGLE_JSON_KEY"]) 
-SHEET_NAME = "Life Metrics 2026"
-TAB_NAME = "Garmin_Stats" 
 
-# Define explicit scopes to ensure we can find the file
+# !!! PASTE YOUR COPIED ID INSIDE THE QUOTES BELOW !!!
+SHEET_ID = "1wCX2fT-YYi67ZmlrZLq6xc--l1mVyuG3Bv5Z9h0NNJw" 
+TAB_NAME = "Garmin" 
+
+# Define explicit scopes
 SCOPES = [
     'https://www.googleapis.com/auth/spreadsheets',
     'https://www.googleapis.com/auth/drive'
@@ -28,7 +30,7 @@ def mps_to_pace(mps):
     return f"{minutes}:{seconds:02d}"
 
 def main():
-    print("--- Starting Garmin Enduro 3 Sync (Debug Mode) ---")
+    print("--- Starting Garmin Enduro 3 Sync (ID Method) ---")
     
     # 1. Login
     try:
@@ -40,13 +42,14 @@ def main():
         traceback.print_exc()
         return
 
-    # 2. Connect to Sheets (With Explicit Scopes)
+    # 2. Connect to Sheets (Using ID)
     try:
         print("Authenticating with Google...")
         gc = gspread.service_account_from_dict(GOOGLE_JSON_KEY, scopes=SCOPES)
         
-        print(f"Opening Sheet: '{SHEET_NAME}'...")
-        sh = gc.open(SHEET_NAME)
+        print(f"Opening Sheet by ID: '{SHEET_ID}'...")
+        # We use open_by_key to find it regardless of the name
+        sh = gc.open_by_key(SHEET_ID)
         
         print(f"Opening Tab: '{TAB_NAME}'...")
         worksheet = sh.worksheet(TAB_NAME)
@@ -54,11 +57,8 @@ def main():
         
     except Exception:
         print("\n!!! SHEET CONNECT FAILED !!!")
-        print("Possible causes:")
-        print("1. The Sheet Name in code doesn't match the actual Google Sheet name exactly.")
-        print("2. You didn't Share the sheet with the 'client_email' found in your JSON key.")
-        print("3. The Google Drive API is not enabled in Cloud Console.\n")
-        print("Full Error Traceback:")
+        print("CRITICAL CHECK: Did you share 'Balance Main Data' with the Service Account Email?")
+        print(f"The bot is trying to access ID: {SHEET_ID}")
         traceback.print_exc()
         return
 
@@ -74,10 +74,8 @@ def main():
         sleep = garmin.get_sleep_data(iso_date)
         user_summary = garmin.get_user_summary(iso_date)
         
-        # Safe get for training status
         training_status = garmin.get_training_status(iso_date) or {}
         fitness_age_data = garmin.get_fitness_age(iso_date) or {}
-
         activities = garmin.get_activities_by_date(iso_date, iso_date, "")
         
         # --- PARSING ---
@@ -108,7 +106,6 @@ def main():
         run_hr_list, run_speed_list, run_cadence_list = [], [], []
 
         for act in activities:
-            # Check typeKey for running
             act_type = act.get('activityType', {}).get('typeKey', '')
             if 'running' in act_type:
                 run_count += 1
@@ -124,7 +121,7 @@ def main():
         avg_pace_str = mps_to_pace(avg_mps)
         
         run_dist_km = round(run_dist / 1000, 2)
-        total_activity_time_min = round(run_time_sec / 60, 0) # Log running time or total? Using run time here.
+        total_activity_time_min = round(run_time_sec / 60, 0)
 
         print(f"Stats: RHR {resting_hr}, Sleep {sleep_hours}h, Runs {run_count}")
 
