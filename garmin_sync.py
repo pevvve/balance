@@ -13,7 +13,8 @@ GOOGLE_JSON_KEY = json.loads(os.environ["GOOGLE_JSON_KEY"])
 
 # !!! PASTE YOUR SPREADSHEET ID HERE !!!
 SHEET_ID = "1wCX2fT-YYi67ZmlrZLq6xc--l1mVyuG3Bv5Z9h0NNJw" 
-TAB_NAME = "Garmin"
+TAB_NAME = "Garmin" 
+
 SCOPES = [
     'https://www.googleapis.com/auth/spreadsheets',
     'https://www.googleapis.com/auth/drive'
@@ -27,7 +28,7 @@ def mps_to_pace(mps):
     return f"{minutes}:{seconds:02d}"
 
 def main():
-    print("--- Starting Garmin Enduro 3 Sync (Final Fix) ---")
+    print("--- Starting Garmin Enduro 3 Sync (Final Version) ---")
     
     # 1. Login
     try:
@@ -63,43 +64,37 @@ def main():
         body_batt = garmin.get_body_battery(iso_date)
         sleep = garmin.get_sleep_data(iso_date)
         
-        # Training Status (Grab the whole blob to parse manually)
         try:
-            # We use the generic call to get the huge JSON structure you showed me
             training_status = garmin.get_training_status(iso_date) or {}
         except:
             training_status = {}
 
         activities = garmin.get_activities_by_date(iso_date, iso_date, "")
 
-        # --- PARSING: THE FIXES ---
+        # --- PARSING ---
         
-        # 1. VO2 Max (New Logic: Dig into 'mostRecentVO2Max')
+        # 1. VO2 Max (Deep Search)
         vo2_max = 0
         try:
             vo2_data = training_status.get('mostRecentVO2Max', {}).get('generic', {})
             vo2_max = vo2_data.get('vo2MaxValue', 0)
         except:
             vo2_max = 0
-            
-        # Fallback if 0
         if not vo2_max:
              vo2_max = user_summary.get('vo2Max', 0)
 
-        # 2. Acute Load (New Logic: Find the 'acuteTrainingLoadDTO' inside dynamic device keys)
+        # 2. Acute Load (Deep Search)
         acute_load = 0
         try:
-            # Go inside 'mostRecentTrainingStatus' -> 'latestTrainingStatusData'
-            # Then loop through keys (like '3607545781') to find the load
             ts_data = training_status.get('mostRecentTrainingStatus', {}).get('latestTrainingStatusData', {})
             for device_id, device_data in ts_data.items():
                 if 'acuteTrainingLoadDTO' in device_data:
                     acute_load = device_data['acuteTrainingLoadDTO'].get('dailyTrainingLoadAcute', 0)
-                    break # Stop once we find it
+                    break 
         except:
             acute_load = 0
         
-        # 3. Endurance Score (Placeholder - not in your logs, defaulting to 0)
+        # 3. Endurance Score (Placeholder)
         endurance_score = 0
 
         # 4. Basic Health
@@ -135,15 +130,20 @@ def main():
                 run_dist += act.get('distance', 0)
                 run_time_sec += act.get('duration', 0)
                 
-                # HEART RATE FIX: Check 'averageHR' if 'averageHeartRate' is missing
+                # HEART RATE FIX
                 hr = act.get('averageHeartRate')
                 if not hr:
-                    hr = act.get('averageHR') # <--- The Fix
+                    hr = act.get('averageHR')
                 
                 speed = act.get('averageSpeed')
                 cad = act.get('averageRunningCadenceInStepsPerMinute')
+                
+                if hr: run_hr_list.append(hr)
+                if speed: run_speed_list.append(speed)
+                if cad: run_cadence_list.append(cad)
 
-avg_run_hr = int(statistics.mean(run_hr_list)) if run_hr_list else 0
+        # CALCULATE AVERAGES
+        avg_run_hr = int(statistics.mean(run_hr_list)) if run_hr_list else 0
         avg_run_cadence = int(statistics.mean(run_cadence_list)) if run_cadence_list else 0
         avg_mps = statistics.mean(run_speed_list) if run_speed_list else 0
         avg_pace_str = mps_to_pace(avg_mps)
@@ -154,7 +154,7 @@ avg_run_hr = int(statistics.mean(run_hr_list)) if run_hr_list else 0
         print(f"Stats Found -> Runs: {run_count} | VO2: {vo2_max} | Load: {acute_load} | AvgHR: {avg_run_hr}")
 
         # --- UPLOAD TO SHEET ---
-        # 18 Columns (Matching your sheet - No Fitness Age)
+        # 18 Columns
         row_data = [
             iso_date, resting_hr, stress_avg, sleep_score, sleep_hours,
             bb_high, bb_low, vo2_max, acute_load,
