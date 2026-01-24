@@ -141,4 +141,33 @@ def main():
                     hr = act.get('averageHR') # <--- The Fix
                 
                 speed = act.get('averageSpeed')
-               cad = act.get('averageRunningCadenceInStepsPerMinute')
+                cad = act.get('averageRunningCadenceInStepsPerMinute')
+
+avg_run_hr = int(statistics.mean(run_hr_list)) if run_hr_list else 0
+        avg_run_cadence = int(statistics.mean(run_cadence_list)) if run_cadence_list else 0
+        avg_mps = statistics.mean(run_speed_list) if run_speed_list else 0
+        avg_pace_str = mps_to_pace(avg_mps)
+        
+        run_dist_km = round(run_dist / 1000, 2)
+        total_activity_time_min = round(run_time_sec / 60, 0)
+
+        print(f"Stats Found -> Runs: {run_count} | VO2: {vo2_max} | Load: {acute_load} | AvgHR: {avg_run_hr}")
+
+        # --- UPLOAD TO SHEET ---
+        # 18 Columns (Matching your sheet - No Fitness Age)
+        row_data = [
+            iso_date, resting_hr, stress_avg, sleep_score, sleep_hours,
+            bb_high, bb_low, vo2_max, acute_load,
+            endurance_score, steps, total_cals, total_activity_time_min,
+            run_dist_km, avg_run_hr, avg_pace_str, avg_run_cadence, run_count
+        ]
+
+        worksheet.append_row(row_data)
+        print("Success: Data uploaded.")
+
+    except Exception:
+        print("Sync Error:")
+        traceback.print_exc()
+
+if __name__ == "__main__":
+    main()
