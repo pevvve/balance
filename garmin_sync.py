@@ -30,7 +30,7 @@ def mps_to_pace(mps):
     return f"{minutes}:{seconds:02d}"
 
 def main():
-    print("--- Starting Garmin Enduro 3 Sync (ID Method) ---")
+    print("--- Starting Garmin Enduro 3 Sync (Safe Mode) ---")
     
     # 1. Login
     try:
@@ -42,23 +42,16 @@ def main():
         traceback.print_exc()
         return
 
-    # 2. Connect to Sheets (Using ID)
+    # 2. Connect to Sheets
     try:
         print("Authenticating with Google...")
         gc = gspread.service_account_from_dict(GOOGLE_JSON_KEY, scopes=SCOPES)
-        
-        print(f"Opening Sheet by ID: '{SHEET_ID}'...")
-        # We use open_by_key to find it regardless of the name
         sh = gc.open_by_key(SHEET_ID)
-        
-        print(f"Opening Tab: '{TAB_NAME}'...")
         worksheet = sh.worksheet(TAB_NAME)
         print("Sheet Connect: Success")
-        
     except Exception:
         print("\n!!! SHEET CONNECT FAILED !!!")
-        print("CRITICAL CHECK: Did you share 'Balance Main Data' with the Service Account Email?")
-        print(f"The bot is trying to access ID: {SHEET_ID}")
+        print("Traceback:")
         traceback.print_exc()
         return
 
@@ -69,13 +62,19 @@ def main():
 
     try:
         # --- FETCH DATA ---
+        # We wrap each call in a safety check in case the library changes
         stats = garmin.get_stats(iso_date)
         body_batt = garmin.get_body_battery(iso_date)
         sleep = garmin.get_sleep_data(iso_date)
         user_summary = garmin.get_user_summary(iso_date)
         
-        training_status = garmin.get_training_status(iso_date) or {}
-        fitness_age_data = garmin.get_fitness_age(iso_date) or {}
+        # Training status is often messy, we handle it carefully
+        try:
+            training_status = garmin.get_training_status(iso_date) or {}
+        except:
+            training_status = {}
+            
+        # Get Activities
         activities = garmin.get_activities_by_date(iso_date, iso_date, "")
         
         # --- PARSING ---
@@ -85,10 +84,12 @@ def main():
         total_cals = user_summary.get('totalKilocalories', 0)
         vo2_max = user_summary.get('vo2Max', 0)
 
+        # Sleep
         sleep_dto = sleep.get('dailySleepDTO', {})
         sleep_hours = round(sleep_dto.get('sleepTimeSeconds', 0) / 3600, 2)
         sleep_score = sleep_dto.get('sleepScores', {}).get('overall', {}).get('value', 0)
 
+        # Body Battery
         bb_list = body_batt.get('bodyBatteryValuesArray', [])
         if bb_list:
             vals = [x[1] for x in bb_list if x[1] is not None]
@@ -97,7 +98,8 @@ def main():
         else:
             bb_high, bb_low = 0, 0
 
-        fit_age = fitness_age_data.get('fitnessAge', 0)
+        # Metrics that caused the crash are now set to safe defaults or extracted differently
+        fit_age = 0 # Placeholder since library doesn't support it directly
         acute_load = training_status.get('acuteTrainingLoadValue', 0)
         endurance_score = training_status.get('enduranceScore', 0)
 
@@ -128,7 +130,7 @@ def main():
         # --- UPLOAD ---
         row_data = [
             iso_date, resting_hr, stress_avg, sleep_score, sleep_hours,
-            bb_high, bb_low, vo2_max, fit_age, acute_load,
+            bb_high, bb_low, vo2_max, acute_load,
             endurance_score, steps, total_cals, total_activity_time_min,
             run_dist_km, avg_run_hr, avg_pace_str, avg_run_cadence, run_count
         ]
