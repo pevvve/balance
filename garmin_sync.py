@@ -141,4 +141,4 @@ def main():
                     hr = act.get('averageHR') # <--- The Fix
                 
                 speed = act.get('averageSpeed')
-                cad = act.get('averageRunningCad
+               cad = act.get('averageRunningCadenceInStepsPerMinute')
