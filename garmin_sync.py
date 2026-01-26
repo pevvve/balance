@@ -10,10 +10,15 @@ from garminconnect import Garmin
 GARMIN_EMAIL = os.environ["GARMIN_EMAIL"]
 GARMIN_PASS = os.environ["GARMIN_PASS"]
 GOOGLE_JSON_KEY = json.loads(os.environ["GOOGLE_JSON_KEY"]) 
+
+# !!! PASTE YOUR SPREADSHEET ID HERE !!!
 SHEET_ID = "1wCX2fT-YYi67ZmlrZLq6xc--l1mVyuG3Bv5Z9h0NNJw" 
 TAB_NAME = "Garmin" 
 
-SCOPES = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+SCOPES = [
+    'https://www.googleapis.com/auth/spreadsheets',
+    'https://www.googleapis.com/auth/drive'
+]
 
 def mps_to_pace(mps):
     if not mps or mps <= 0: return "0:00"
@@ -23,7 +28,7 @@ def mps_to_pace(mps):
     return f"{minutes}:{seconds:02d}"
 
 def main():
-    print("--- Starting Garmin Enduro 3 Sync (Global + Run Logic) ---")
+    print("--- Starting Garmin Enduro 3 Sync (Final Global Logic) ---")
     
     # 1. Login
     try:
@@ -46,7 +51,8 @@ def main():
         traceback.print_exc()
         return
 
-    # 3. DATE LOGIC (Yesterday)
+    # 3. DATE LOGIC
+    # Fetch YESTERDAY
     target_date = datetime.date.today() - datetime.timedelta(days=1)
     iso_date = target_date.isoformat()
     print(f"Fetching Data for: {iso_date}")
@@ -64,7 +70,7 @@ def main():
         activities = garmin.get_activities_by_date(iso_date, iso_date, "")
 
         # --- PARSING ---
-        # VO2 Max
+        # 1. VO2 Max
         vo2_max = 0
         try:
             vo2_data = training_status.get('mostRecentVO2Max', {}).get('generic', {})
@@ -73,7 +79,7 @@ def main():
             vo2_max = 0
         if not vo2_max: vo2_max = user_summary.get('vo2Max', 0)
 
-        # Acute Load
+        # 2. Acute Load
         acute_load = 0
         try:
             ts_data = training_status.get('mostRecentTrainingStatus', {}).get('latestTrainingStatusData', {})
@@ -106,7 +112,7 @@ def main():
         else:
             bb_high, bb_low = 0, 0
 
-        # --- ACTIVITY LOGIC (UPDATED) ---
+        # --- ACTIVITY LOGIC (THE FIX) ---
         activity_count = 0
         total_duration_seconds = 0
         
@@ -114,11 +120,11 @@ def main():
         run_hr_list, run_speed_list, run_cadence_list = [], [], []
 
         for act in activities:
-            # 1. GLOBAL: Count EVERYTHING (Strength, Cycling, etc.)
+            # A. GLOBAL: Count EVERYTHING (Strength, Cycling, Yoga, etc.)
             activity_count += 1
             total_duration_seconds += act.get('duration', 0)
 
-            # 2. SPECIFIC: Only run metrics if 'running'
+            # B. SPECIFIC: Only calculate Pace/Cadence if it is a RUN
             type_key = act.get('activityType', {}).get('typeKey', 'other')
             if 'running' in type_key:
                 run_dist += act.get('distance', 0)
@@ -133,7 +139,7 @@ def main():
                 if speed: run_speed_list.append(speed)
                 if cad: run_cadence_list.append(cad)
 
-        # Averages
+        # Calculate Averages (Safe division)
         avg_run_hr = int(statistics.mean(run_hr_list)) if run_hr_list else 0
         avg_run_cadence = int(statistics.mean(run_cadence_list)) if run_cadence_list else 0
         avg_mps = statistics.mean(run_speed_list) if run_speed_list else 0
