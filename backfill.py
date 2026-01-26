@@ -11,15 +11,10 @@ from garminconnect import Garmin
 GARMIN_EMAIL = os.environ["GARMIN_EMAIL"]
 GARMIN_PASS = os.environ["GARMIN_PASS"]
 GOOGLE_JSON_KEY = json.loads(os.environ["GOOGLE_JSON_KEY"]) 
-
-# !!! PASTE YOUR SPREADSHEET ID HERE !!!
 SHEET_ID = "1wCX2fT-YYi67ZmlrZLq6xc--l1mVyuG3Bv5Z9h0NNJw" 
 TAB_NAME = "Garmin" 
 
-SCOPES = [
-    'https://www.googleapis.com/auth/spreadsheets',
-    'https://www.googleapis.com/auth/drive'
-]
+SCOPES = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
 
 def mps_to_pace(mps):
     if not mps or mps <= 0: return "0:00"
@@ -38,26 +33,23 @@ def process_date(garmin, worksheet, date_obj):
         user_summary = garmin.get_user_summary(iso_date)
         body_batt = garmin.get_body_battery(iso_date)
         sleep = garmin.get_sleep_data(iso_date)
-        
         try:
             training_status = garmin.get_training_status(iso_date) or {}
         except:
             training_status = {}
-
         activities = garmin.get_activities_by_date(iso_date, iso_date, "")
 
         # --- PARSING ---
-        # 1. VO2 Max
+        # VO2 Max
         vo2_max = 0
         try:
             vo2_data = training_status.get('mostRecentVO2Max', {}).get('generic', {})
             vo2_max = vo2_data.get('vo2MaxValue', 0)
         except:
             vo2_max = 0
-        if not vo2_max:
-             vo2_max = user_summary.get('vo2Max', 0)
+        if not vo2_max: vo2_max = user_summary.get('vo2Max', 0)
 
-        # 2. Acute Load
+        # Acute Load
         acute_load = 0
         try:
             ts_data = training_status.get('mostRecentTrainingStatus', {}).get('latestTrainingStatusData', {})
@@ -90,76 +82,74 @@ def process_date(garmin, worksheet, date_obj):
         else:
             bb_high, bb_low = 0, 0
 
-        # Run Metrics
-        run_dist, run_time_sec, run_count = 0, 0, 0
+        # --- ACTIVITY LOGIC (GLOBAL) ---
+        activity_count = 0
+        total_duration_seconds = 0
+        
+        run_dist = 0
         run_hr_list, run_speed_list, run_cadence_list = [], [], []
 
         for act in activities:
+            # Global Counts (Strength, Yoga, etc.)
+            activity_count += 1
+            total_duration_seconds += act.get('duration', 0)
+
+            # Running Specifics
             type_key = act.get('activityType', {}).get('typeKey', 'other')
             if 'running' in type_key:
-                run_count += 1
                 run_dist += act.get('distance', 0)
-                run_time_sec += act.get('duration', 0)
-                
-                hr = act.get('averageHeartRate')
-                if not hr: hr = act.get('averageHR')
-                speed = act.get('averageSpeed')
-                cad = act.get('averageRunningCadenceInStepsPerMinute')
-                
+                hr = act.get('averageHeartRate') or act.get('averageHR')
                 if hr: run_hr_list.append(hr)
-                if speed: run_speed_list.append(speed)
-                if cad: run_cadence_list.append(cad)
+                if act.get('averageSpeed'): run_speed_list.append(act['averageSpeed'])
+                if act.get('averageRunningCadenceInStepsPerMinute'): run_cadence_list.append(act['averageRunningCadenceInStepsPerMinute'])
 
+        # Averages
         avg_run_hr = int(statistics.mean(run_hr_list)) if run_hr_list else 0
         avg_run_cadence = int(statistics.mean(run_cadence_list)) if run_cadence_list else 0
         avg_mps = statistics.mean(run_speed_list) if run_speed_list else 0
         avg_pace_str = mps_to_pace(avg_mps)
         
         run_dist_km = round(run_dist / 1000, 2)
-        total_activity_time_min = round(run_time_sec / 60, 0)
+        total_activity_time_min = round(total_duration_seconds / 60, 0)
 
         # --- UPLOAD ---
         row_data = [
             iso_date, resting_hr, stress_avg, sleep_score, sleep_hours,
             bb_high, bb_low, vo2_max, acute_load,
             endurance_score, steps, total_cals, total_activity_time_min,
-            run_dist_km, avg_run_hr, avg_pace_str, avg_run_cadence, run_count
+            run_dist_km, avg_run_hr, avg_pace_str, avg_run_cadence, activity_count
         ]
 
         worksheet.append_row(row_data)
-        print(f" > Success: {iso_date} Uploaded.")
+        print(f" > Success: {iso_date} Uploaded (Activities: {activity_count}).")
 
     except Exception:
         print(f" > Error on {iso_date}:")
         traceback.print_exc()
 
 def main():
-    print("--- Starting Time Machine (Jan 10 - Jan 23) ---")
-    
-    # 1. Login & Connect
+    print("--- Starting Full History Rewrite (Jan 10 - Jan 25) ---")
     try:
         garmin = Garmin(GARMIN_EMAIL, GARMIN_PASS)
         garmin.login()
         gc = gspread.service_account_from_dict(GOOGLE_JSON_KEY, scopes=SCOPES)
         sh = gc.open_by_key(SHEET_ID)
         worksheet = sh.worksheet(TAB_NAME)
-        print("Login & Sheet Connection: Success")
     except Exception as e:
         print(f"Connection Failed: {e}")
         return
 
-    # 2. DATE LOOP (Jan 10 to Jan 23)
-    start_date = datetime.date(2026, 1, 23)
+    # FULL DATE RANGE
+    start_date = datetime.date(2026, 1, 10)
     end_date = datetime.date(2026, 1, 25)
     
     current_date = start_date
     while current_date <= end_date:
         process_date(garmin, worksheet, current_date)
         current_date += datetime.timedelta(days=1)
-        # Sleep to be nice to Garmin API
         time.sleep(2)
 
-    print("\n--- Time Machine Complete ---")
+    print("\n--- Complete ---")
 
 if __name__ == "__main__":
     main()
