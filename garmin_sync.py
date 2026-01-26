@@ -10,15 +10,10 @@ from garminconnect import Garmin
 GARMIN_EMAIL = os.environ["GARMIN_EMAIL"]
 GARMIN_PASS = os.environ["GARMIN_PASS"]
 GOOGLE_JSON_KEY = json.loads(os.environ["GOOGLE_JSON_KEY"]) 
-
-# !!! PASTE YOUR SPREADSHEET ID HERE !!!
 SHEET_ID = "1wCX2fT-YYi67ZmlrZLq6xc--l1mVyuG3Bv5Z9h0NNJw" 
 TAB_NAME = "Garmin" 
 
-SCOPES = [
-    'https://www.googleapis.com/auth/spreadsheets',
-    'https://www.googleapis.com/auth/drive'
-]
+SCOPES = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
 
 def mps_to_pace(mps):
     if not mps or mps <= 0: return "0:00"
@@ -28,7 +23,7 @@ def mps_to_pace(mps):
     return f"{minutes}:{seconds:02d}"
 
 def main():
-    print("--- Starting Garmin Enduro 3 Sync (Final Version) ---")
+    print("--- Starting Garmin Enduro 3 Sync (Global + Run Logic) ---")
     
     # 1. Login
     try:
@@ -51,8 +46,7 @@ def main():
         traceback.print_exc()
         return
 
-    # 3. DATE LOGIC
-    # We fetch YESTERDAY's full data
+    # 3. DATE LOGIC (Yesterday)
     target_date = datetime.date.today() - datetime.timedelta(days=1)
     iso_date = target_date.isoformat()
     print(f"Fetching Data for: {iso_date}")
@@ -63,27 +57,23 @@ def main():
         user_summary = garmin.get_user_summary(iso_date)
         body_batt = garmin.get_body_battery(iso_date)
         sleep = garmin.get_sleep_data(iso_date)
-        
         try:
             training_status = garmin.get_training_status(iso_date) or {}
         except:
             training_status = {}
-
         activities = garmin.get_activities_by_date(iso_date, iso_date, "")
 
         # --- PARSING ---
-        
-        # 1. VO2 Max (Deep Search)
+        # VO2 Max
         vo2_max = 0
         try:
             vo2_data = training_status.get('mostRecentVO2Max', {}).get('generic', {})
             vo2_max = vo2_data.get('vo2MaxValue', 0)
         except:
             vo2_max = 0
-        if not vo2_max:
-             vo2_max = user_summary.get('vo2Max', 0)
+        if not vo2_max: vo2_max = user_summary.get('vo2Max', 0)
 
-        # 2. Acute Load (Deep Search)
+        # Acute Load
         acute_load = 0
         try:
             ts_data = training_status.get('mostRecentTrainingStatus', {}).get('latestTrainingStatusData', {})
@@ -94,21 +84,18 @@ def main():
         except:
             acute_load = 0
         
-        # 3. Endurance Score (Placeholder)
         endurance_score = 0
-
-        # 4. Basic Health
         resting_hr = stats.get('restingHeartRate', 0)
         stress_avg = stats.get('averageStressLevel', 0)
         steps = user_summary.get('totalSteps', 0)
         total_cals = user_summary.get('totalKilocalories', 0)
 
-        # 5. Sleep
+        # Sleep
         sleep_dto = sleep.get('dailySleepDTO', {})
         sleep_hours = round(sleep_dto.get('sleepTimeSeconds', 0) / 3600, 2)
         sleep_score = sleep_dto.get('sleepScores', {}).get('overall', {}).get('value', 0)
 
-        # 6. Body Battery (List Fix)
+        # Body Battery
         if isinstance(body_batt, list):
             body_batt = body_batt[0] if body_batt else {}
         bb_list = body_batt.get('bodyBatteryValuesArray', [])
@@ -119,21 +106,25 @@ def main():
         else:
             bb_high, bb_low = 0, 0
 
-        # --- RUNNING METRICS LOOP ---
-        run_dist, run_time_sec, run_count = 0, 0, 0
+        # --- ACTIVITY LOGIC (UPDATED) ---
+        activity_count = 0
+        total_duration_seconds = 0
+        
+        run_dist = 0
         run_hr_list, run_speed_list, run_cadence_list = [], [], []
 
         for act in activities:
+            # 1. GLOBAL: Count EVERYTHING (Strength, Cycling, etc.)
+            activity_count += 1
+            total_duration_seconds += act.get('duration', 0)
+
+            # 2. SPECIFIC: Only run metrics if 'running'
             type_key = act.get('activityType', {}).get('typeKey', 'other')
             if 'running' in type_key:
-                run_count += 1
                 run_dist += act.get('distance', 0)
-                run_time_sec += act.get('duration', 0)
                 
-                # HEART RATE FIX
                 hr = act.get('averageHeartRate')
-                if not hr:
-                    hr = act.get('averageHR')
+                if not hr: hr = act.get('averageHR')
                 
                 speed = act.get('averageSpeed')
                 cad = act.get('averageRunningCadenceInStepsPerMinute')
@@ -142,24 +133,23 @@ def main():
                 if speed: run_speed_list.append(speed)
                 if cad: run_cadence_list.append(cad)
 
-        # CALCULATE AVERAGES
+        # Averages
         avg_run_hr = int(statistics.mean(run_hr_list)) if run_hr_list else 0
         avg_run_cadence = int(statistics.mean(run_cadence_list)) if run_cadence_list else 0
         avg_mps = statistics.mean(run_speed_list) if run_speed_list else 0
         avg_pace_str = mps_to_pace(avg_mps)
         
         run_dist_km = round(run_dist / 1000, 2)
-        total_activity_time_min = round(run_time_sec / 60, 0)
+        total_activity_time_min = round(total_duration_seconds / 60, 0)
 
-        print(f"Stats Found -> Runs: {run_count} | VO2: {vo2_max} | Load: {acute_load} | AvgHR: {avg_run_hr}")
+        print(f"Stats Found -> Activities: {activity_count} | Mins: {total_activity_time_min} | Runs: {len(run_hr_list)}")
 
-        # --- UPLOAD TO SHEET ---
-        # 18 Columns
+        # --- UPLOAD ---
         row_data = [
             iso_date, resting_hr, stress_avg, sleep_score, sleep_hours,
             bb_high, bb_low, vo2_max, acute_load,
             endurance_score, steps, total_cals, total_activity_time_min,
-            run_dist_km, avg_run_hr, avg_pace_str, avg_run_cadence, run_count
+            run_dist_km, avg_run_hr, avg_pace_str, avg_run_cadence, activity_count
         ]
 
         worksheet.append_row(row_data)
