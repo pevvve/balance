@@ -149,7 +149,7 @@ def main():
         return
 
     # 2. DATE LOOP (Jan 10 to Jan 23)
-    start_date = datetime.date(2026, 1, 24)
+    start_date = datetime.date(2026, 1, 23)
     end_date = datetime.date(2026, 1, 25)
     
     current_date = start_date
