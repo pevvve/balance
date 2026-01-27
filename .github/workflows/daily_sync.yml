@@ -1,13 +1,17 @@
 name: Garmin Data Sync
 
 on:
-  # 1. Automatic Schedule
+  # Trigger 1: The Schedule (Changed to 12:15 UTC / 6:15 AM CDMX to reset timer)
   schedule:
-    # Runs at 12:00 UTC (which is 6:00 AM Mexico City time)
-    - cron: '0 12 * * *'
+    - cron: '15 12 * * *'
   
-  # 2. Manual Button (So you can test it right now)
+  # Trigger 2: Manual Button
   workflow_dispatch:
+
+  # Trigger 3: runs every time you save a file (Ensures the system is "alive")
+  push:
+    branches:
+      - main
 
 jobs:
   sync_garmin:
