@@ -35,4 +35,4 @@ jobs:
           GARMIN_EMAIL: ${{ secrets.GARMIN_EMAIL }}
           GARMIN_PASS: ${{ secrets.GARMIN_PASS }}
           GOOGLE_JSON_KEY: ${{ secrets.GOOGLE_JSON_KEY }}
-        run: python garmin_sync.py
+        run: python backfill.py
