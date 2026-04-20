@@ -141,7 +141,7 @@ def main():
 
     # FULL DATE RANGE
     start_date = datetime.date(2026, 4, 19)
-    end_date = datetime.date(2026, 4, 19)
+    end_date = datetime.date(2026, 4, 20)
     
     current_date = start_date
     while current_date <= end_date:
