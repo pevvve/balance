@@ -140,7 +140,7 @@ def main():
         return
 
     # FULL DATE RANGE
-    start_date = datetime.date(2026, 4, 19)
+    start_date = datetime.date(2026, 4, 18)
     end_date = datetime.date(2026, 4, 20)
     
     current_date = start_date
