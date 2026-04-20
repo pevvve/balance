@@ -68,7 +68,7 @@ def process_date(garmin, worksheet, date_obj):
 
         # Sleep
         sleep_dto = sleep.get('dailySleepDTO', {})
-        sleep_hours = round(sleep_dto.get('sleepTimeSeconds', 0) / 3600, 2)
+        sleep_hours = round((sleep_dto.get('sleepTimeSeconds') or 0) / 3600, 2)
         sleep_score = sleep_dto.get('sleepScores', {}).get('overall', {}).get('value', 0)
 
         # Body Battery
